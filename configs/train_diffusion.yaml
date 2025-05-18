@@ -1,0 +1,43 @@
+defaults:
+  - _self_
+  - dataset: cats
+  - model: gd_unet
+  - diffusion: gd_gaussian
+  - schedule_sampler: uniform
+
+dataloader:
+  _target_: torch.utils.data.DataLoader
+  _partial_: True
+  batch_size: 128
+  shuffle: False
+  num_workers: 4
+  pin_memory: True
+  persistent_workers: True
+  prefetch_factor: 2
+
+optimizer:
+  _target_: torch.optim.AdamW
+  _partial_: True
+  lr: 6e-4
+  weight_decay: 0.2
+
+exp:
+  seed: 42
+  max_iters: 1e6
+  ema_decay: 0.9999
+
+  ckpt_path: null
+  pretrained_ckpt_path: data/pretrained/64x64_diffusion.pt
+
+fabric:
+  _target_: lightning.Fabric
+  num_nodes: 1
+  devices: 1
+  precision: bf16-mixed
+
+wandb:
+  entity: jgrzywaczewski
+  project: cats_diffusion
+
+
+

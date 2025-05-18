@@ -1,0 +1,2 @@
+_target_: guided_diffusion.resample.UniformSampler
+_partial_: true

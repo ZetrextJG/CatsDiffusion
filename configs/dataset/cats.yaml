@@ -1,0 +1,2 @@
+_target_: dataset.cats.CatsDataset
+pt_data_path: data/cats/cats_raw.pt

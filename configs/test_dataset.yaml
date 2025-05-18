@@ -1,0 +1,12 @@
+defaults:
+  - _self_
+  - dataset: cats
+
+exp:
+  seed: 42
+
+fabric:
+  _target_: lightning.Fabric
+  num_nodes: 1
+  devices: 1
+

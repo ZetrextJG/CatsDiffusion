@@ -1,0 +1,23 @@
+defaults:
+  - _self_
+  - dataset: cats
+
+dataloader:
+  _target_: torch.utils.data.DataLoader
+  _partial_: True
+  batch_size: 256
+  shuffle: False
+  num_workers: 4
+  pin_memory: True
+  persistent_workers: True
+  prefetch_factor: 2
+
+exp:
+  seed: 42
+  max_iters: 1e6
+
+fabric:
+  _target_: lightning.Fabric
+  num_nodes: 1
+  devices: 1
+
