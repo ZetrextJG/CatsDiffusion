@@ -143,6 +143,7 @@ def create_model(
     dropout=0,
     resblock_updown=False,
     use_new_attention_order=False,
+    norm_type: str = "group",
 ):
     if channel_mult == "":
         if image_size == 512:
@@ -179,6 +180,7 @@ def create_model(
         use_scale_shift_norm=use_scale_shift_norm,
         resblock_updown=resblock_updown,
         use_new_attention_order=use_new_attention_order,
+        norm_type=norm_type,
     )
 
 

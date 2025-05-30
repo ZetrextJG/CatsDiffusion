@@ -6,6 +6,7 @@ import math
 
 import torch as th
 import torch.nn as nn
+from .dyt import DyTNorm
 
 from torch.amp import custom_fwd, custom_bwd, autocast
 
@@ -86,14 +87,19 @@ def mean_flat(tensor):
     return tensor.mean(dim=list(range(1, len(tensor.shape))))
 
 
-def normalization(channels):
+def normalization(channels, norm_type="group"):
     """
     Make a standard normalization layer.
 
     :param channels: number of input channels.
     :return: an nn.Module for normalization.
     """
-    return GroupNorm32(32, channels)
+    if norm_type == "group":
+        return GroupNorm32(32, channels)
+    elif norm_type == "dyt":
+        return DyTNorm(channels)
+    else:
+        raise ValueError(f"unsupported normalization type: {norm_type}")
 
 
 def timestep_embedding(timesteps, dim, max_period=10000):

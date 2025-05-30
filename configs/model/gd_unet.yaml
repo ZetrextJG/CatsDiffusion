@@ -15,4 +15,5 @@ use_scale_shift_norm: true
 resblock_updown: true
 # use_fp16: false # This we will set with fabric rather than manual
 use_new_attention_order: true
+norm_type: group
 
