@@ -3,7 +3,6 @@ import hydra
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 from lightning.fabric import Fabric
-import time
 import wandb
 from tqdm import tqdm
 from torchvision.utils import make_grid
@@ -39,31 +38,16 @@ def get_dataloader(config, fabric: Fabric):
 
 def get_modules(config, fabric: Fabric):
     model: torch.nn.Module = instantiate(config.model)
-    optimizer = instantiate(config.optimizer)(params=model.parameters())
-    model, optimizer = fabric.setup(model, optimizer)
+    model = fabric.setup(model)
     ema = ExponentialMovingAverage(model.parameters(), decay=config.exp.ema_decay)
 
     if config.exp.ckpt_path is not None:
         log.info(f"Loading model from {config.exp.ckpt_path}")
         checkpoint = fabric.load(config.exp.ckpt_path)
         model.load_state_dict(checkpoint["model"])
-        optimizer.load_state_dict(checkpoint["optimizer"])
         ema.load_state_dict(checkpoint["ema"])
-    elif config.exp.pretrained_ckpt_path is not None:
-        log.info(f"Loading pretrained model from {config.exp.pretrained_ckpt_path}")
-        checkpoint = fabric.load(config.exp.pretrained_ckpt_path)
-        checkpoint.pop("label_emb.weight") # Remove class conditioning
 
-        if not config.diffusion.learn_sigma:
-            # Remove learned sigma channels 
-            checkpoint["out.2.weight"] = checkpoint["out.2.weight"][:3]
-            checkpoint["out.2.bias"] = checkpoint["out.2.bias"][:3]
-
-        model.load_state_dict(checkpoint)
-    else:
-        log.info("No checkpoint found, starting from scratch")
-
-    return model, optimizer, ema
+    return model,  ema
 
 
 @torch.inference_mode()
@@ -107,7 +91,7 @@ def compute_fid(model, eval_diffusion, dataloader, num_samples=2048, micro_batch
     return fid_score
 
 
-@hydra.main(version_base = None, config_path = "../configs", config_name = "train_diffusion")
+@hydra.main(version_base = None, config_path = "../configs", config_name = "eval_fid")
 def main(config: DictConfig):
     torch.multiprocessing.set_start_method('spawn')
     torch.set_float32_matmul_precision("high")
@@ -124,12 +108,10 @@ def main(config: DictConfig):
     dataloader = get_dataloader(config, fabric)
     log.info("Dataloader initialized")
 
-    diffusion = instantiate(config.diffusion)
-    eval_diffusion = instantiate(config.diffusion, steps=100, rescale_timesteps=True)
-    schedule_sampler = instantiate(config.schedule_sampler)(diffusion=diffusion)
+    eval_diffusion = instantiate(config.diffusion, steps=1000, rescale_timesteps=True)
     log.info("Diffusion and timesteps schedule initialized")
 
-    model, optimizer, ema = get_modules(config, fabric)
+    model, ema = get_modules(config, fabric)
     log.info("Diffusion model initialized")
 
     log.info(f"""Model summary: """)
@@ -137,21 +119,10 @@ def main(config: DictConfig):
     # get the model compiled and get the summary
     input_shape = tuple(dataloader.dataset[0][1].shape)
     input_shape = (config.exp.micro_batch_size, *input_shape)
-    print(summary(model, input_data=(
+    summary(model, input_data=(
         torch.randn(input_shape).to(fabric.device),
         torch.Tensor([0] * input_shape[0]).to(fabric.device)
-    )))
-
-
-    def save_model(iter: int):
-        model.eval()
-        save_dir = Path(config.exp.log_dir) / "checkpoints"
-        iter_k = iter // 1000
-        fabric.save(
-            save_dir / f"model_{iter_k}k.ckpt",
-            {"model": model, "optimizer": optimizer, "ema": ema},
-        )
-        model.train()
+    ))
 
     @torch.inference_mode()
     def generate_and_log_images():
@@ -161,7 +132,6 @@ def main(config: DictConfig):
             grid = make_grid(generated, nrow=8, normalize=True, value_range=(-1, 1))
             wandb.log({"generated": wandb.Image(grid)})
         model.train()
-        
 
     @torch.inference_mode()
     def calculate_and_log_fid():
@@ -172,55 +142,10 @@ def main(config: DictConfig):
         model.train()
 
 
-    log.info("Starting to iterate over dataloader")
-    pbar = tqdm(desc="Training", unit="steps")
-    batch_mult = config.dataloader.batch_size // config.exp.micro_batch_size
+    log.info("Starting evaluation...")
 
-    model.train()
-    for i, (idx, batch_img) in enumerate(dataloader):
-        optimizer.zero_grad()
-
-        timestep_history = []
-        loss_history = []
-
-        for micro_batch_img in torch.split(batch_img, config.exp.micro_batch_size):
-            t, weights = schedule_sampler.sample(micro_batch_img.shape[0], device=fabric.device)
-            losses = diffusion.training_losses(model, micro_batch_img, t, model_kwargs=None)
-
-            timestep_history.append(t.cpu())
-            loss_history.append(losses["loss"].detach().cpu())
-
-            loss = (losses["loss"] * weights).mean()
-            fabric.backward(loss / batch_mult, model=model)
-
-        optimizer.step()
-        optimizer.zero_grad()
-        ema.update(model.parameters())
-
-        times_h = torch.concat(timestep_history, dim=0)
-        losses_h = torch.concat(loss_history, dim=0)
-        schedule_sampler.update_with_all_losses(times_h, losses_h)
-
-        wandb.log({"loss": loss.item()}, step=i)
-        pbar.set_postfix({"loss": loss.item()})
-        pbar.update(1)
-
-        if i > config.exp.max_iters:
-            log.info(f"Reached max iterations: {config.exp.max_iters}")
-            generate_and_log_images()
-            calculate_and_log_fid()
-            save_model(i)
-            break
-
-        if i % 1000 == 0:
-            generate_and_log_images()
-
-        if i % 5000 == 0:
-            calculate_and_log_fid()
-            if i != 0:
-                save_model(i)
-
-    pbar.close()
+    generate_and_log_images()
+    calculate_and_log_fid()
 
 
 if __name__ == "__main__":

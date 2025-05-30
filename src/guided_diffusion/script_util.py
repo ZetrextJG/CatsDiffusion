@@ -142,7 +142,6 @@ def create_model(
     use_scale_shift_norm=False,
     dropout=0,
     resblock_updown=False,
-    use_fp16=False,
     use_new_attention_order=False,
 ):
     if channel_mult == "":
@@ -174,7 +173,6 @@ def create_model(
         channel_mult=channel_mult,
         num_classes=(NUM_CLASSES if class_cond else None),
         use_checkpoint=use_checkpoint,
-        use_fp16=use_fp16,
         num_heads=num_heads,
         num_head_channels=num_head_channels,
         num_heads_upsample=num_heads_upsample,

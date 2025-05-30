@@ -8,7 +8,7 @@ class CatsDataset(torch.utils.data.Dataset):
         # Shape: (N, 3, 64, 64)
         self.data = torch.load(pt_data_path)
         self.transform = transforms.Compose([
-            transforms.RandomVerticalFlip()
+            transforms.RandomHorizontalFlip(),
         ])
 
     def __len__(self):

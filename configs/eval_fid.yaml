@@ -15,26 +15,19 @@ dataloader:
   persistent_workers: True
   prefetch_factor: 2
 
-optimizer:
-  _target_: torch.optim.AdamW
-  _partial_: True
-  lr: 1e-4
-  weight_decay: 0.2
-
 exp:
   seed: 42
-  max_iters: 50000 
   ema_decay: 0.9999
-  micro_batch_size: 64
+  micro_batch_size: 128
 
   ckpt_path: null
-  pretrained_ckpt_path: data/pretrained/64x64_diffusion.pt
+
 
 fabric:
   _target_: lightning.Fabric
   num_nodes: 1
   devices: 1
-  precision: bf16-mixed # bf16-mixed
+  precision: bf16-mixed
 
 wandb:
   entity: jgrzywaczewski

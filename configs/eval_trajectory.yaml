@@ -1,0 +1,28 @@
+defaults:
+  - _self_
+  - model: gd_unet
+  - diffusion: cats_gaussian
+  - schedule_sampler: uniform
+
+exp:
+  seed: 42
+  ema_decay: 0.9999
+
+  micro_batch_size: 8
+  log_steps: 8
+
+  ckpt_path: outputs/2025-05-29/18-34-46/checkpoints/model_10k.ckpt # Change that
+
+
+fabric:
+  _target_: lightning.Fabric
+  num_nodes: 1
+  devices: 1
+  precision: 32
+
+wandb:
+  entity: jgrzywaczewski
+  project: cats_diffusion
+
+
+

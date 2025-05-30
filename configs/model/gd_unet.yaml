@@ -10,9 +10,9 @@ channel_mult: ""
 dropout: 0.1
 learn_sigma: true
 class_cond: false
-use_checkpoint: true # as in use forward gradient checkpointing
+use_checkpoint: false # as in use forward gradient checkpointing
 use_scale_shift_norm: true
 resblock_updown: true
-use_fp16: false # This we will set with fabric rather than manual
+# use_fp16: false # This we will set with fabric rather than manual
 use_new_attention_order: true
 

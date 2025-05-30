@@ -7,6 +7,8 @@ import math
 import torch as th
 import torch.nn as nn
 
+from torch.amp import custom_fwd, custom_bwd, autocast
+
 
 class GroupNorm32(nn.GroupNorm):
     def forward(self, x):
@@ -134,19 +136,23 @@ def checkpoint(func, inputs, params, flag):
 
 
 class CheckpointFunction(th.autograd.Function):
+
     @staticmethod
+    @custom_fwd(device_type="cuda")
     def forward(ctx, run_function, length, *args):
         ctx.run_function = run_function
         ctx.input_tensors = list(args[:length])
         ctx.input_params = list(args[length:])
         with th.no_grad():
+            ctx.had_autocast = th.is_autocast_enabled()
             output_tensors = ctx.run_function(*ctx.input_tensors)
         return output_tensors
 
     @staticmethod
+    @custom_bwd(device_type="cuda")
     def backward(ctx, *output_grads):
         ctx.input_tensors = [x.detach().requires_grad_(True) for x in ctx.input_tensors]
-        with th.enable_grad():
+        with th.enable_grad(), autocast("cuda", enabled=ctx.had_autocast):
             # Fixes a bug where the first op in run_function modifies the
             # Tensor storage in place, which is not allowed for detach()'d
             # Tensors.
