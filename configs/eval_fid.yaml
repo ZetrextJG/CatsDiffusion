@@ -2,7 +2,7 @@ defaults:
   - _self_
   - dataset: cats
   - model: gd_unet
-  - diffusion: gd_gaussian
+  - diffusion: cats_gaussian
   - schedule_sampler: uniform
 
 dataloader:
@@ -18,16 +18,21 @@ dataloader:
 exp:
   seed: 42
   ema_decay: 0.9999
-  micro_batch_size: 128
+  micro_batch_size: 64
+  max_iters: 4048 # Random number above 2048
 
-  ckpt_path: null
+  sampling_method: ddim # ddim, ddpm. dpm, sa
+  nfe: 1000
+
+
+  ckpt_path: outputs/2025-06-01/17-18-30/checkpoints/model_20k.ckpt
 
 
 fabric:
   _target_: lightning.Fabric
   num_nodes: 1
   devices: 1
-  precision: bf16-mixed
+  precision: 32
 
 wandb:
   entity: jgrzywaczewski

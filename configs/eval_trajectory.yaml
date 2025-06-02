@@ -11,7 +11,7 @@ exp:
   micro_batch_size: 8
   log_steps: 8
 
-  ckpt_path: outputs/2025-05-29/18-34-46/checkpoints/model_10k.ckpt # Change that
+  ckpt_path: outputs/2025-06-01/17-18-30/checkpoints/model_20k.ckpt
 
 
 fabric:

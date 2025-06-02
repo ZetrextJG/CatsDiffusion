@@ -14,6 +14,10 @@ from utils.data_utils import InfiniteSampler
 from utils.hydra_utils import set_log_dir
 from utils.wandb_utils import setup_wandb
 
+from solvers.dpm_solver_pytorch import DPM_Solver, NoiseScheduleVP, model_wrapper
+from solvers.sa_solver import NoiseScheduleVP as SAScheduleVP
+from solvers.sa_solver import SASolver
+
 from torchmetrics.image.fid import FrechetInceptionDistance
 
 
@@ -51,7 +55,10 @@ def get_modules(config, fabric: Fabric):
 
 
 @torch.inference_mode()
-def compute_fid(model, eval_diffusion, dataloader, num_samples=2048, micro_batch_size=32):
+def compute_fid(sample_images, dataloader, num_samples=2048, micro_batch_size=32):
+    """
+    sample_images: function that takes a number of images and returns generated images
+    """
     fid = FrechetInceptionDistance(feature=2048, normalize=True)
 
     original_images = []
@@ -66,7 +73,7 @@ def compute_fid(model, eval_diffusion, dataloader, num_samples=2048, micro_batch
             original_images.append(micro_batch_img.cpu())
 
             # Generate images
-            generated = eval_diffusion.ddim_sample_loop(model, (micro_batch_img.shape[0], 3, 64, 64))
+            generated = sample_images(micro_batch_img.shape[0])
             generated_images.append(generated.cpu())
 
             images_counter += micro_batch_img.shape[0]
@@ -108,7 +115,12 @@ def main(config: DictConfig):
     dataloader = get_dataloader(config, fabric)
     log.info("Dataloader initialized")
 
-    eval_diffusion = instantiate(config.diffusion, steps=1000, rescale_timesteps=True)
+    eval_diffusion_orig = instantiate(config.diffusion, steps=1000)
+    if config.exp.nfe != 1000:
+        eval_diffusion = instantiate(config.diffusion, steps=1000, rescale_timesteps=True, timestep_respacing=str(config.exp.nfe))
+    else:
+        eval_diffusion = instantiate(config.diffusion, steps=1000)
+
     log.info("Diffusion and timesteps schedule initialized")
 
     model, ema = get_modules(config, fabric)
@@ -125,27 +137,45 @@ def main(config: DictConfig):
     ))
 
     @torch.inference_mode()
-    def generate_and_log_images():
+    def sample_images(num_images):
         with ema.average_parameters():
             model.eval()
-            generated = eval_diffusion.ddim_sample_loop(model, (32, 3, 64, 64), progress=True)
-            grid = make_grid(generated, nrow=8, normalize=True, value_range=(-1, 1))
-            wandb.log({"generated": wandb.Image(grid)})
+            match config.exp.sampling_method:
+                case "ddim":
+                    generated = eval_diffusion.ddim_sample_loop(model, (num_images, 3, 64, 64), progress=True)
+                case "ddpm":
+                    generated = eval_diffusion.ddim_sample_loop(model, (num_images, 3, 64, 64), eta=1.0, progress=True)
+                case "dpm":
+                    betas = torch.from_numpy(eval_diffusion_orig.betas).to(fabric.device)
+                    schedule = NoiseScheduleVP("discrete", betas=betas)
+                    model_fn = model_wrapper(model, schedule)
+                    solver = DPM_Solver(model_fn, schedule)
+                    noise = torch.randn((num_images, 3, 64, 64), device=fabric.device)
+                    generated = solver.sample(noise, steps=config.exp.nfe) # Respacing happens in the solver
+                case "sa":
+                    betas = torch.from_numpy(eval_diffusion_orig.betas).to(fabric.device)
+                    schedule = SAScheduleVP("discrete", betas=betas)
+                    model_fn = model_wrapper(model, schedule)
+                    solver = SASolver(model_fn, schedule)
+                    noise = torch.randn((num_images, 3, 64, 64), device=fabric.device)
+                    tau_func = lambda t: 1 # Fully stochastic sampling
+                    generated = solver.sample("more_steps", noise, steps=config.exp.nfe, tau=tau_func)
+                case _:
+                    raise ValueError(f"Unknown sampling method: {config.exp.sampling_method}")
         model.train()
-
-    @torch.inference_mode()
-    def calculate_and_log_fid():
-        with ema.average_parameters():
-            model.eval()
-            fid_score = compute_fid(model, eval_diffusion, dataloader, num_samples=2048, micro_batch_size=config.exp.micro_batch_size)
-            wandb.log({"fid": fid_score})
-        model.train()
-
+        return generated
 
     log.info("Starting evaluation...")
 
-    generate_and_log_images()
-    calculate_and_log_fid()
+    with torch.inference_mode():
+        log.info("Generating initial images for logging...")
+        generated = sample_images(32)
+        grid = make_grid(generated, nrow=8, normalize=True, value_range=(-1, 1))
+        wandb.log({"generated": wandb.Image(grid)})
+
+        log.info("Calculating FID score...")
+        fid_score = compute_fid(sample_images, dataloader, num_samples=2048, micro_batch_size=config.exp.micro_batch_size)
+        wandb.log({"fid": fid_score})
 
 
 if __name__ == "__main__":
