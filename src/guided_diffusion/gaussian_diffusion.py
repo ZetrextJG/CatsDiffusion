@@ -584,6 +584,40 @@ class GaussianDiffusion:
         sample = mean_pred + nonzero_mask * sigma * noise
         return {"sample": sample, "pred_xstart": out["pred_xstart"]}
 
+
+    def ddrm_inpaint_sample(
+        self,
+        model,
+        x,
+        t,
+        x1,
+        mask,
+        clip_denoised=False,
+        model_kwargs=None
+    ):
+        out = self.p_mean_variance(
+            model,
+            x,
+            t,
+            clip_denoised=clip_denoised,
+            denoised_fn=None,
+            model_kwargs=model_kwargs,
+        )
+        alpha_bar_prev = _extract_into_tensor(self.alphas_cumprod_prev, t, x.shape)
+        # WARN: This is different than DDIM
+        sigma_prev = (
+            th.sqrt(1 - alpha_bar_prev) / th.sqrt(alpha_bar_prev)
+        )
+
+        # Equation 8 in the DDRM paper.
+        eta_b = 2
+        opt_8_1 = out["pred_xstart"]
+        opt_8_3 = (1 - eta_b) * opt_8_1 + eta_b * x1
+        mean_x0t = opt_8_3 * (1 - mask) + opt_8_1 * mask
+        sample = th.sqrt(alpha_bar_prev) * (mean_x0t + sigma_prev * th.randn_like(x))
+
+        return {"sample": sample, "pred_xstart": out["pred_xstart"]}
+
     def ddim_reverse_sample(
         self,
         model,

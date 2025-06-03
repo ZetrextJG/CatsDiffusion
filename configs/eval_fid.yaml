@@ -10,10 +10,9 @@ dataloader:
   _partial_: True
   batch_size: 256
   shuffle: False
-  num_workers: 4
+  num_workers: 1
   pin_memory: True
-  persistent_workers: True
-  prefetch_factor: 2
+  persistent_workers: False
 
 exp:
   seed: 42
@@ -25,7 +24,7 @@ exp:
   nfe: 1000
 
 
-  ckpt_path: outputs/2025-06-01/17-18-30/checkpoints/model_20k.ckpt
+  ckpt_path: outputs/2025-06-01/17-18-30/checkpoints/model_30k.ckpt
 
 
 fabric:

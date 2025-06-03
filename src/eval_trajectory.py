@@ -53,7 +53,11 @@ def main(config: DictConfig):
     fabric: Fabric = get_fabric(config)
     log.info("Fabric initialized")
 
-    eval_diffusion = instantiate(config.diffusion, steps=1000, rescale_timesteps=True)
+
+    if config.exp.nfe != 1000:
+        eval_diffusion = instantiate(config.diffusion, steps=1000, rescale_timesteps=True, timestep_respacing=str(config.exp.nfe))
+    else:
+        eval_diffusion = instantiate(config.diffusion, steps=1000)
     log.info("Diffusion and timesteps schedule initialized")
 
     model, ema = get_modules(config, fabric)
