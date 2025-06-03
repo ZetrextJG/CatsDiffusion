@@ -173,6 +173,7 @@ def model_wrapper(
     model_type="noise",
     model_kwargs={},
     guidance_type="uncond",
+    learn_sigma: bool = True,
     condition=None,
     unconditional_condition=None,
     guidance_scale=1.,
@@ -286,6 +287,8 @@ def model_wrapper(
         else:
             output = model(x, t_input, cond, **model_kwargs)
         if model_type == "noise":
+            if learn_sigma:
+                return output[:, :x.shape[1]] # Return the noise prediction
             return output
         elif model_type == "x_start":
             alpha_t, sigma_t = noise_schedule.marginal_alpha(t_continuous), noise_schedule.marginal_std(t_continuous)

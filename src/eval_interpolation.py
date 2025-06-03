@@ -82,7 +82,8 @@ def main(config: DictConfig):
             noise = torch.randn(shape, device=fabric.device)
 
             # Sample initial images
-            generated = eval_diffusion.ddim_sample_loop(model, shape, noise=noise, progress=True)
+            eta = 0.0 if config.exp.ddim else 1.0
+            generated = eval_diffusion.ddim_sample_loop(model, shape, noise=noise, progress=True, eta=eta)
             generated_grid = make_grid(generated, nrow=config.exp.micro_batch_size, normalize=True, value_range=(-1, 1))
             wandb.log({"generated": wandb.Image(generated_grid)})
 
@@ -102,7 +103,7 @@ def main(config: DictConfig):
             interpolated_noise = noise * (1 - lambdas) + noise2 * lambdas  # (IS, BS, 3, 64, 64)
             interpolated_noise = interpolated_noise.reshape(-1, 3, 64, 64)  # (IS * BS, 3, 64, 64)
 
-            interpolated = eval_diffusion.ddim_sample_loop(model, tuple(interpolated_noise.shape), noise=interpolated_noise, progress=True)
+            interpolated = eval_diffusion.ddim_sample_loop(model, tuple(interpolated_noise.shape), noise=interpolated_noise, progress=True, eta=eta)
             interpolated = interpolated.reshape(config.exp.interpolation_steps, config.exp.micro_batch_size, 3, 64, 64)  # (IS, BS, 3, 64, 64)
             interpolated = interpolated.transpose(0, 1).reshape(-1, 3, 64, 64)  # (BS * IS, 3, 64, 64)
             interpolated_grid = make_grid(interpolated, nrow=config.exp.interpolation_steps, normalize=True, value_range=(-1, 1))

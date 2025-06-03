@@ -13,6 +13,7 @@ exp:
   nfe: 1000
 
   ckpt_path: outputs/2025-06-01/17-18-30/checkpoints/model_30k.ckpt
+  ddim: True
 
 
 fabric:

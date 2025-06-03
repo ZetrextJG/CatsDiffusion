@@ -107,7 +107,7 @@ def main(config: DictConfig):
             elif config.exp.algorithm == "ddnm":
                 generated = eval_diffusion.ddim_sample_loop(
                     model, 
-                    image_sample.shape, 
+                    degraded.shape, 
                     denoised_fn=lambda x0: degraded * (1 - mask) + x0 * mask,
                     eta=1.0,
                     progress=True, 
@@ -119,17 +119,13 @@ def main(config: DictConfig):
 
     with torch.inference_mode():
         log.info("Generating initial images for logging...")
-        # generated = sample_images(32)
-        # grid = make_grid(generated, nrow=8, normalize=True, value_range=(-1, 1))
-        # wandb.log({"generated": wandb.Image(grid)})
 
         image_sample = next(iter(dataloader))[1][:8].to(fabric.device)
-        degraded, mask = inpaint_degrad(image_sample)
-        generated = restore_images(degraded, mask)
-        all_images = torch.cat([image_sample, degraded, generated], dim=0)
+        batch_degraded, batch_mask = inpaint_degrad(image_sample)
+        generated = restore_images(batch_degraded, batch_mask)
+        all_images = torch.cat([image_sample, batch_degraded, generated], dim=0)
         grid = make_grid(all_images, nrow=8, normalize=True, value_range=(-1, 1))
         wandb.log({"inpainting": wandb.Image(grid)})
-
 
         num_samples = 2048
         fid = FrechetInceptionDistance(feature=2048, normalize=True)
@@ -145,8 +141,8 @@ def main(config: DictConfig):
                 original_images.append(micro_batch_img.cpu())
 
                 # Generate images
-                degraded, mask = inpaint_degrad(micro_batch_img)
-                generated = restore_images(degraded, mask)
+                batch_degraded, batch_mask = inpaint_degrad(micro_batch_img)
+                generated = restore_images(batch_degraded, batch_mask)
                 generated_images.append(generated.cpu())
 
                 images_counter += micro_batch_img.shape[0]

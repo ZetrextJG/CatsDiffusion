@@ -79,6 +79,7 @@ def main(config: DictConfig):
             ))
 
             log_steps = np.linspace(0, eval_diffusion.num_timesteps - 1, config.exp.log_steps).astype(int)
+            print(f"Logging at steps: {log_steps}")
             log_steps = set(log_steps.tolist())
 
             x_preds = []
@@ -94,7 +95,7 @@ def main(config: DictConfig):
             stacked = torch.stack([x_preds, x0_preds], dim=2)  # (steps, batch_size, 2,  3, 64, 64)
             stacked = stacked.transpose(0, 1) # Make time on x axis, batch on y axis
             stacked = stacked.transpose(1, 2).reshape(-1, 3, 64, 64)
-            grid = make_grid(stacked, nrow=config.exp.micro_batch_size, normalize=True, value_range=(-1, 1))
+            grid = make_grid(stacked, nrow=config.exp.log_steps, normalize=True, value_range=(-1, 1))
             wandb.log({"trajectory": wandb.Image(grid)})
 
 
